@@ -17,6 +17,10 @@ services:
     environment:
       # DATABASE_URL переопределяем здесь, чтобы хост всегда указывал на сервис db
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - SERPAPI_KEY=${SERPAPI_KEY:-}
+      - SERPAPI_URL=${SERPAPI_URL:-https://scraperapi.thordata.com/request}
+      - OPENAI_MODEL=${OPENAI_MODEL:-openai/gpt-4o-mini}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
     restart: unless-stopped
 
   db:

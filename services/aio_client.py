@@ -1,13 +1,19 @@
 """
-AIO Client — получение текста Google AI Overview через шлюз Thordata (SerpApi-совместимый).
+AIO Client — получение Google AI Overview через Thordata ScraperAPI.
+
+Формат запроса (из документации Thordata):
+  POST https://scraperapi.thordata.com/request
+  Authorization: Bearer <SERPAPI_KEY>
+  Content-Type: application/x-www-form-urlencoded
+  Body: engine=google&q=<query>&json=1&ai_overview=true
 
 Переменные окружения:
-  SERPAPI_KEY  — ваш API-ключ Thordata
-  SERPAPI_URL  — URL шлюза Thordata (например https://api.thordata.com/serp или аналогичный)
+  SERPAPI_KEY  — ваш API-ключ Thordata (передаётся в заголовке Authorization)
+  SERPAPI_URL  — URL эндпоинта (по умолчанию https://scraperapi.thordata.com/request)
 
 Возвращает:
-  str  — текст AI Overview / Answer Box, если блок найден в ответе
-  None — если блок отсутствует (статус "aio_not_found")
+  str  — текст AI Overview / Answer Box
+  None — если Google не показывает AI Overview для данного запроса
 """
 from __future__ import annotations
 
@@ -19,42 +25,40 @@ import httpx
 logger = logging.getLogger(__name__)
 
 SERPAPI_KEY: str = os.getenv("SERPAPI_KEY", "")
-SERPAPI_URL: str = os.getenv("SERPAPI_URL", "https://serpapi.com/search")
+SERPAPI_URL: str = os.getenv(
+    "SERPAPI_URL",
+    "https://scraperapi.thordata.com/request",
+)
 
-# Тайм-аут ожидания ответа от Thordata (секунды)
-_REQUEST_TIMEOUT = 30
+_REQUEST_TIMEOUT = 30  # секунды
 
 
 def _extract_aio_text(data: dict) -> str | None:
     """
-    Извлекает текст AI Overview или Answer Box из JSON-ответа SerpApi / Thordata.
+    Извлекает текст AI Overview или Answer Box из JSON-ответа Thordata.
 
     Порядок приоритетов:
-      1. ai_overview.text_blocks  (новый формат Google AI Overview)
-      2. ai_overview.page_context (альтернативный ключ)
-      3. answer_box.answer        (Featured Snippet / Direct Answer)
-      4. answer_box.snippet
+      1. ai_overview.text_blocks  (массив текстовых блоков)
+      2. ai_overview.snippet / answer / page_context
+      3. answer_box.answer / snippet / result
     """
-    # --- AI Overview (основной блок) ---
     aio = data.get("ai_overview")
     if isinstance(aio, dict):
-        # Новый формат: список текстовых блоков
-        blocks = aio.get("text_blocks") or aio.get("blocks") or []
+        blocks: list = aio.get("text_blocks") or aio.get("blocks") or []
         texts = []
         for block in blocks:
             if isinstance(block, dict):
-                snippet = block.get("snippet") or block.get("text") or ""
-                if snippet:
-                    texts.append(snippet.strip())
+                text = block.get("snippet") or block.get("text") or ""
+                if text:
+                    texts.append(text.strip())
         if texts:
             return "\n\n".join(texts)
 
-        # Запасной ключ
-        context = aio.get("page_context") or aio.get("answer") or ""
-        if context:
-            return context.strip()
+        for key in ("snippet", "answer", "page_context"):
+            value = aio.get(key)
+            if value and isinstance(value, str):
+                return value.strip()
 
-    # --- Answer Box (Featured Snippet) ---
     answer_box = data.get("answer_box")
     if isinstance(answer_box, dict):
         for key in ("answer", "snippet", "result"):
@@ -67,7 +71,7 @@ def _extract_aio_text(data: dict) -> str | None:
 
 async def fetch_aio(query: str) -> str | None:
     """
-    Выполняет запрос к Thordata (SerpApi-шлюз) и возвращает текст AI Overview.
+    Выполняет POST-запрос к Thordata ScraperAPI и возвращает текст AI Overview.
 
     Args:
         query: поисковый запрос.
@@ -76,27 +80,31 @@ async def fetch_aio(query: str) -> str | None:
         Строку с текстом AI Overview/Answer Box, или None если блок не найден.
 
     Raises:
-        RuntimeError: при сетевой ошибке или некорректном ответе от API.
+        RuntimeError: при ошибке конфигурации, сети или API.
     """
     if not SERPAPI_KEY:
         raise RuntimeError(
             "SERPAPI_KEY не задан. Укажите ключ Thordata в переменной окружения SERPAPI_KEY."
         )
 
-    params = {
-        "engine": "google",
-        "q": query,
-        "api_key": SERPAPI_KEY,
-        "hl": "ru",
-        "gl": "ru",
-        "num": "10",
+    headers = {
+        "Authorization": f"Bearer {SERPAPI_KEY}",
+        "Content-Type": "application/x-www-form-urlencoded",
     }
 
-    logger.info("Запрос к Thordata SerpApi: q=%r, url=%s", query, SERPAPI_URL)
+    # Thordata принимает параметры как form-encoded тело POST-запроса
+    data = {
+        "engine": "google",
+        "q": query,
+        "json": "1",
+        "ai_overview": "true",
+    }
+
+    logger.info("Запрос к Thordata ScraperAPI: q=%r url=%s", query, SERPAPI_URL)
 
     async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT) as client:
         try:
-            response = await client.get(SERPAPI_URL, params=params)
+            response = await client.post(SERPAPI_URL, headers=headers, data=data)
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             raise RuntimeError(
@@ -106,17 +114,16 @@ async def fetch_aio(query: str) -> str | None:
             raise RuntimeError(f"Ошибка соединения с Thordata: {exc}") from exc
 
     try:
-        data: dict = response.json()
+        result: dict = response.json()
     except Exception as exc:
         raise RuntimeError(f"Не удалось распарсить JSON-ответ от Thordata: {exc}") from exc
 
-    # Проверяем ошибки на уровне API
-    if "error" in data:
-        raise RuntimeError(f"Ошибка Thordata API: {data['error']}")
+    if "error" in result:
+        raise RuntimeError(f"Ошибка Thordata API: {result['error']}")
 
-    text = _extract_aio_text(data)
+    text = _extract_aio_text(result)
     if text is None:
-        logger.info("AI Overview / Answer Box не найден для запроса: %r", query)
+        logger.info("AI Overview не найден для запроса: %r", query)
     else:
         logger.info("AI Overview получен (%d символов)", len(text))
 

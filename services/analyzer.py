@@ -1,12 +1,16 @@
 """
-Analyzer service: использует Instructor + OpenAI (или OpenRouter) для получения
-структурированного GapAnalysisResult из текста AI Overview и текста веб-страницы.
+Analyzer service: Instructor + OpenRouter (по умолчанию) или OpenAI.
+
+Приоритет выбора клиента:
+  1. OPENROUTER_API_KEY → OpenRouter (https://openrouter.ai/api/v1)
+  2. OPENAI_API_KEY     → OpenAI напрямую
+  Если ни одного ключа нет — RuntimeError при старте.
 
 Переменные окружения:
-  OPENAI_API_KEY      — ключ OpenAI
-  OPENROUTER_API_KEY  — ключ OpenRouter (альтернатива; берётся если OPENAI_API_KEY не задан)
-  OPENAI_MODEL        — модель (по умолчанию gpt-4o-mini)
-  OPENAI_BASE_URL     — переопределить base URL (например для OpenRouter: https://openrouter.ai/api/v1)
+  OPENROUTER_API_KEY  — ключ OpenRouter (приоритетный)
+  OPENAI_API_KEY      — ключ OpenAI (резервный)
+  OPENAI_MODEL        — модель (по умолчанию openai/gpt-4o-mini для OpenRouter)
+  OPENAI_BASE_URL     — переопределение base URL (опционально)
 """
 from __future__ import annotations
 
@@ -24,10 +28,14 @@ logger = logging.getLogger(__name__)
 # Конфигурация
 # ---------------------------------------------------------------------------
 
-MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
+OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 OPENAI_BASE_URL: str = os.getenv("OPENAI_BASE_URL", "")
+
+# Имя модели: по умолчанию openai/gpt-4o-mini через OpenRouter.
+# При переключении на OpenAI напрямую смените на "gpt-4o-mini".
+MODEL: str = os.getenv("OPENAI_MODEL", "openai/gpt-4o-mini")
+
 
 # ---------------------------------------------------------------------------
 # Построение клиента
@@ -35,29 +43,27 @@ OPENAI_BASE_URL: str = os.getenv("OPENAI_BASE_URL", "")
 
 def _build_client() -> instructor.AsyncInstructor:
     """
-    Возвращает Instructor-клиент, обёрнутый поверх AsyncOpenAI.
+    Возвращает Instructor-клиент поверх AsyncOpenAI.
 
-    Логика выбора ключа и эндпоинта:
-      1. Если задан OPENAI_API_KEY  → используем OpenAI напрямую.
-      2. Если задан OPENROUTER_API_KEY → используем OpenRouter (openrouter.ai/api/v1).
-      3. Иначе → поднимаем RuntimeError при старте, чтобы сразу было видно проблему.
+    OpenRouter — приоритет (задаётся OPENROUTER_API_KEY).
+    OpenAI    — резерв    (задаётся OPENAI_API_KEY).
     """
-    if OPENAI_API_KEY:
-        raw = AsyncOpenAI(
-            api_key=OPENAI_API_KEY,
-            base_url=OPENAI_BASE_URL or None,
-        )
-        logger.info("LLM-клиент: OpenAI, модель=%s", MODEL)
-    elif OPENROUTER_API_KEY:
+    if OPENROUTER_API_KEY:
         raw = AsyncOpenAI(
             api_key=OPENROUTER_API_KEY,
             base_url=OPENAI_BASE_URL or "https://openrouter.ai/api/v1",
         )
         logger.info("LLM-клиент: OpenRouter, модель=%s", MODEL)
+    elif OPENAI_API_KEY:
+        raw = AsyncOpenAI(
+            api_key=OPENAI_API_KEY,
+            base_url=OPENAI_BASE_URL or None,
+        )
+        logger.info("LLM-клиент: OpenAI, модель=%s", MODEL)
     else:
         raise RuntimeError(
-            "Не задан ни OPENAI_API_KEY, ни OPENROUTER_API_KEY. "
-            "Укажите один из ключей в переменных окружения."
+            "Не задан ни OPENROUTER_API_KEY, ни OPENAI_API_KEY. "
+            "Укажите один из ключей в файле .env."
         )
 
     return instructor.from_openai(raw, mode=instructor.Mode.JSON)
@@ -65,24 +71,25 @@ def _build_client() -> instructor.AsyncInstructor:
 
 client: instructor.AsyncInstructor = _build_client()
 
+
 # ---------------------------------------------------------------------------
 # Промпты
 # ---------------------------------------------------------------------------
 
 SYSTEM_PROMPT = """\
-Ты — эксперт по SEO и анализу контента.
-Тебе будут переданы два текста:
+Ты — эксперт по SEO и GEO-оптимизации контента.
+Тебе передаётся два текста:
   1. AI Overview — краткое резюме, которое Google показывает над результатами поиска.
   2. Текст веб-страницы — основное содержимое анализируемой страницы.
 
 Твоя задача:
   1. Извлечь все ключевые фактические утверждения из AI Overview (поле facts).
-  2. Для каждого факта определить, раскрыт ли он на веб-странице (present_in_page).
+  2. Для каждого факта определить, раскрыт ли он на странице (present_in_page: true/false).
   3. Составить список пробелов — тем из AI Overview, которые страница не покрывает (gaps).
   4. Дать конкретные рекомендации с приоритетом для устранения каждого пробела (recommendations).
   5. Написать краткое итоговое резюме (summary).
 
-Верни ответ строго в формате JSON, соответствующем предоставленной схеме. Без лишнего текста.
+Верни ответ строго в формате JSON согласно предоставленной схеме. Без пояснений вне JSON.
 """
 
 
@@ -100,13 +107,6 @@ def _build_user_prompt(aio_text: str, page_text: str) -> str:
 async def run_gap_analysis(aio_text: str, page_text: str) -> GapAnalysisResult:
     """
     Обращается к LLM через Instructor и возвращает валидированный GapAnalysisResult.
-
-    Args:
-        aio_text:  текст AI Overview, полученный от Thordata.
-        page_text: текст веб-страницы, извлечённый Trafilatura.
-
-    Returns:
-        Структурированный результат gap-анализа.
     """
     logger.info(
         "Запуск gap-анализа. AIO: %d симв., страница: %d симв.",
