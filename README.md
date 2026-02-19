@@ -61,7 +61,7 @@ POST /analyze
 ### 1. Клонировать репозиторий
 
 ```bash
-git clone <ваш-репозиторий-url>
+git clone https://github.com/hxt14ee/gap-analysis-api.git
 cd gap-analysis-api
 ```
 
