@@ -8,11 +8,7 @@ REST API + встроенный веб-интерфейс для анализа 
 
 ## Архитектура
 
-```
-POST /analyze  →  Thordata → Trafilatura → LLM → PostgreSQL
-GET  /history  →  последние 10 записей
-GET  /         →  веб-UI
-```
+
 
 | Компонент | Технология |
 |---|---|
