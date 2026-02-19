@@ -2,24 +2,23 @@
 
 REST API + встроенный веб-интерфейс для анализа разрывов между **Google AI Overview** и содержимым веб-страницы.
 
+```
+git clone https://github.com/hxt14ee/gap-analysis-api
+```
+
 ---
 
 ## Архитектура
 
 ```
-POST /analyze
-     ├─ Thordata SERP API  → текст AI Overview
-     ├─ Trafilatura        → текст страницы
-     ├─ LLM (Instructor)   → факты / пробелы / рекомендации
-     └─ PostgreSQL 16      → хранение
-
-GET /history → последние 10 записей
-GET /        → встроенный веб-UI
+POST /analyze  →  Thordata → Trafilatura → LLM → PostgreSQL
+GET  /history  →  последние 10 записей
+GET  /         →  веб-UI
 ```
 
 | Компонент | Технология |
 |---|---|
-| API + UI | FastAPI + Uvicorn (port 8000) |
+| API + UI | FastAPI + Uvicorn · порт 8000 |
 | БД | SQLAlchemy async + PostgreSQL 16 |
 | SERP | Thordata ScraperAPI |
 | Контент | Trafilatura |
@@ -32,39 +31,53 @@ GET /        → встроенный веб-UI
 ### Требования
 Docker Engine 24+ и Docker Compose v2.
 
-### 1. Настроить `.env`
+### 1. Клонировать
 
 ```bash
-git clone <url> && cd gap-analysis-api
+git clone https://github.com/hxt14ee/gap-analysis-api
+cd gap-analysis-api
 cp .env.example .env
 ```
 
-Заполните в `.env`:
+### 2. Настроить `.env`
+
+Откройте `.env` и заполните обязательные поля:
+
 ```ini
-SERPAPI_KEY=         # ключ из dashboard.thordata.com/serp-api
-OPENROUTER_API_KEY=  # или OPENAI_API_KEY=
-POSTGRES_PASSWORD=   # произвольный пароль (он же в DATABASE_URL)
+POSTGRES_USER=gapuser        # имя пользователя БД
+POSTGRES_PASSWORD=gappassword # пароль БД
+POSTGRES_DB=gapanalysis
+
+# !! Хост "db" не меняйте — это внутреннее имя контейнера
+DATABASE_URL=postgresql+asyncpg://gapuser:gappassword@db:5432/gapanalysis
+
+SERPAPI_KEY=       # ключ из dashboard.thordata.com/serp-api
+OPENROUTER_API_KEY= # или OPENAI_API_KEY=
 ```
 
-> **Важно:** `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` должны совпадать
-> с соответствующими частями строки `DATABASE_URL`.
+> **Важно — смена логина/пароля БД:**
+> Если вы меняете `POSTGRES_USER` или `POSTGRES_PASSWORD`, нужно обновить **три места одновременно**:
+> 1. `POSTGRES_USER` / `POSTGRES_PASSWORD` в `.env`
+> 2. Строку `DATABASE_URL` в `.env`
+> 3. Строку `DATABASE_URL` в `docker-compose.yml` → секция `environment` сервиса `api`:
+>    ```yaml
+>    - DATABASE_URL=postgresql+asyncpg://ВАШ_ЛОГИН:ВАШ_ПАРОЛЬ@db:5432/ВАШ_БД
+>    ```
 
-### 2. Запуск
+### 3. Запуск
 
 ```bash
 docker compose up -d --build
 ```
 
-| Адрес | Назначение |
-|---|---|
-| http://localhost:8000 | Веб-UI + REST API |
-| http://localhost:8000/docs | Swagger |
+---
 
-```bash
-docker compose logs -f api   # логи
-docker compose down          # остановить
-docker compose down -v       # остановить + удалить данные
-```
+## Адреса после запуска
+
+| Что | Адрес |
+|---|---|
+| 🖥️ Веб-интерфейс | http://localhost:8000 |
+| 📖 Swagger / OpenAPI | http://localhost:8000/docs |
 
 ---
 
@@ -76,9 +89,9 @@ docker compose down -v       # остановить + удалить данны�
 ```
 
 ### `GET /history`
-Последние 10 записей (тот же формат, что `/analyze`).
+Последние 10 записей (тот же формат ответа, что и `/analyze`).
 
-### Статусы ответа
+### Статусы
 
 | Статус | Описание |
 |---|---|
@@ -97,9 +110,19 @@ OPENROUTER_API_KEY=sk-or-...
 OPENAI_MODEL=openai/gpt-4o-mini
 ```
 
-**OpenAI:**
+**OpenAI напрямую:**
 ```ini
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini
 OPENAI_BASE_URL=
+```
+
+---
+
+## Управление
+
+```bash
+docker compose logs -f api   # логи бэкенда
+docker compose down          # остановить (данные сохраняются)
+docker compose down -v       # остановить и удалить данные БД
 ```

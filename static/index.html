@@ -12,38 +12,51 @@
 
 <body>
 
-    <aside>
-        <div class="sidebar-header">
-            <h2>🕓 <span>История</span></h2>
-        </div>
-        <div id="history-list">
-            <p style="padding:1rem;font-size:.82rem;color:var(--muted)">Загрузка…</p>
-        </div>
-        <button class="refresh-btn" onclick="loadHistory()">↻ Обновить историю</button>
-    </aside>
+    <div class="app">
 
-    <main>
-        <h1>🔍 Gap Analysis</h1>
-        <p class="subtitle">Сравни страницу с тем, что Google показывает в AI&nbsp;Overview</p>
+        <header class="top-bar">
+            <span class="logo">🔍 Gap Analysis</span>
+            <p class="subtitle">Сравни страницу с тем, что Google показывает в AI&nbsp;Overview</p>
+        </header>
 
-        <div class="card">
-            <label>Поисковый запрос</label>
-            <input id="query" type="text" placeholder="например: как похудеть за месяц">
-            <label>URL страницы</label>
-            <input id="url" type="url" placeholder="https://example.com/your-article">
-            <button class="run-btn" id="run-btn" onclick="runAnalysis()">▶ Запустить анализ</button>
+        <!-- Вкладки -->
+        <nav class="tabs">
+            <button class="tab active" data-tab="analyze" onclick="switchTab('analyze', this)">▶ Новый анализ</button>
+            <button class="tab" data-tab="archive" onclick="switchTab('archive', this)">🕓 Архив запросов</button>
+        </nav>
+
+        <!-- Вкладка: Новый анализ -->
+        <div class="tab-content active" id="tab-analyze">
+            <div class="card">
+                <label>Поисковый запрос</label>
+                <input id="query" type="text" placeholder="например: как похудеть за месяц">
+                <label>URL страницы</label>
+                <input id="url" type="url" placeholder="https://example.com/your-article">
+                <button class="run-btn" id="run-btn" onclick="runAnalysis()">▶ Запустить анализ</button>
+            </div>
+
+            <div class="spinner" id="spinner">
+                <div class="spin"></div>
+                <p>Получаем AI Overview и анализируем страницу…</p>
+            </div>
+
+            <div id="results"></div>
         </div>
 
-        <div class="spinner" id="spinner">
-            <div class="spin"></div>
-            <p>Получаем AI Overview и анализируем страницу…</p>
+        <!-- Вкладка: Архив -->
+        <div class="tab-content" id="tab-archive">
+            <div class="search-wrap">
+                <input id="search" type="text" placeholder="🔎 Поиск по запросу или URL…" oninput="filterHistory()">
+                <button class="refresh-btn" onclick="loadHistory()">↻ Обновить</button>
+            </div>
+            <div id="history-list">
+                <p class="empty-msg">Загрузка…</p>
+            </div>
         </div>
 
-        <div id="results"></div>
-    </main>
+    </div>
 
     <div id="toast"></div>
-
     <script src="/static/app.js"></script>
 </body>
 
