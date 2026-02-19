@@ -1,11 +1,12 @@
 version: "3.9"
 
-# Переменные читаются из файла .env в директории проекта.
-# Скопируйте .env.example → .env и заполните значения перед запуском.
+# Все переменные читаются из .env (cp .env.example .env)
 
 services:
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: gap_analysis_api
     ports:
       - "8000:8000"
@@ -15,12 +16,26 @@ services:
     env_file:
       - .env
     environment:
-      # DATABASE_URL переопределяем здесь, чтобы хост всегда указывал на сервис db
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - SERPAPI_KEY=${SERPAPI_KEY:-}
       - SERPAPI_URL=${SERPAPI_URL:-https://scraperapi.thordata.com/request}
       - OPENAI_MODEL=${OPENAI_MODEL:-openai/gpt-4o-mini}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: gap_analysis_frontend
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
+    env_file:
+      - .env
+    environment:
+      - API_BASE_URL=http://api:8000
     restart: unless-stopped
 
   db:
