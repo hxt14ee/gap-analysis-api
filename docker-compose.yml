@@ -1,12 +1,8 @@
 version: "3.9"
 
-# Все переменные читаются из .env (cp .env.example .env)
-
 services:
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
     container_name: gap_analysis_api
     ports:
       - "8000:8000"
@@ -21,21 +17,6 @@ services:
       - SERPAPI_URL=${SERPAPI_URL:-https://scraperapi.thordata.com/request}
       - OPENAI_MODEL=${OPENAI_MODEL:-openai/gpt-4o-mini}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
-    restart: unless-stopped
-
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-    container_name: gap_analysis_frontend
-    ports:
-      - "8501:8501"
-    depends_on:
-      - api
-    env_file:
-      - .env
-    environment:
-      - API_BASE_URL=http://api:8000
     restart: unless-stopped
 
   db:

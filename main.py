@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 from typing import List
 
 from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,6 +34,14 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Статика: index.html отдаётся на /
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+@app.get("/", include_in_schema=False)
+async def ui():
+    return FileResponse("static/index.html")
 
 
 @app.get("/health", tags=["Meta"])
@@ -82,7 +92,6 @@ async def analyze(
 ) -> AnalyzeResponse:
     url_str = str(body.url)
 
-    # Создаём запись сразу, чтобы id был доступен при любом исходе
     record = AnalysisRequest(query=body.query, url=url_str, status="pending")
     db.add(record)
     await db.commit()

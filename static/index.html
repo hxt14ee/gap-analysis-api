@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Gap Analysis</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+
+    <aside>
+        <div class="sidebar-header">
+            <h2>🕓 <span>История</span></h2>
+        </div>
+        <div id="history-list">
+            <p style="padding:1rem;font-size:.82rem;color:var(--muted)">Загрузка…</p>
+        </div>
+        <button class="refresh-btn" onclick="loadHistory()">↻ Обновить историю</button>
+    </aside>
+
+    <main>
+        <h1>🔍 Gap Analysis</h1>
+        <p class="subtitle">Сравни страницу с тем, что Google показывает в AI&nbsp;Overview</p>
+
+        <div class="card">
+            <label>Поисковый запрос</label>
+            <input id="query" type="text" placeholder="например: как похудеть за месяц">
+            <label>URL страницы</label>
+            <input id="url" type="url" placeholder="https://example.com/your-article">
+            <button class="run-btn" id="run-btn" onclick="runAnalysis()">▶ Запустить анализ</button>
+        </div>
+
+        <div class="spinner" id="spinner">
+            <div class="spin"></div>
+            <p>Получаем AI Overview и анализируем страницу…</p>
+        </div>
+
+        <div id="results"></div>
+    </main>
+
+    <div id="toast"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+
+</html>
