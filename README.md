@@ -2,9 +2,7 @@
 
 REST API + встроенный веб-интерфейс для анализа разрывов между **Google AI Overview** и содержимым веб-страницы.
 
-```
-git clone https://github.com/hxt14ee/gap-analysis-api
-```
+
 
 ---
 
