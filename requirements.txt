@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+sqlalchemy[asyncio]
+asyncpg
+pydantic
+pydantic-settings
+httpx
+trafilatura
+instructor
+openai
+alembic
+python-dotenv
